@@ -17,10 +17,20 @@ floatX = 'float32'
 
 
 class POMDPEnv(object):
-    def __init__(self, confusion_dim, num_actual_states, num_actions):
+    def __init__(self, confusion_dim, num_actual_states, num_actions, good_terminal_states=9, bad_terminal_states=8,
+                 max_steps=1000):
         self.model = MDPUserModel(confusion_dim, num_actual_states, num_actions)
         self.state_buffer = self.model.id2state(0)  # current state of the environment (use self.reset)
         self.turn = 0
+        if type(good_terminal_states) is int:
+            self.good_terminals = [good_terminal_states]
+        else:
+            self.good_terminals = good_terminal_states
+        if type(bad_terminal_states) is int:
+            self.bad_terminals = [bad_terminal_states]
+        else:
+            self.bad_terminals = bad_terminal_states
+        self.max_steps = max_steps
 
     def get_observations(self):
         return self.state_buffer
@@ -28,10 +38,28 @@ class POMDPEnv(object):
     def step(self, action):
         self.state_buffer = self.model.transition(self.state_buffer, action)
         self.turn += 1
+        return self.state_buffer, self.get_reward(), self.is_done(), {}  # no additional information
 
     def reset(self, init_state=0):
         self.state_buffer = self.model.id2state(init_state)
         self.turn = 0
+
+    def is_done(self):
+        obs_id = self.model.state2id(self.state_buffer)
+        if obs_id == self.good_terminals or obs_id == self.bad_terminals or self.turn >= self.max_steps:
+            return True
+        else:
+            return False
+
+    def get_reward(self):
+        state = self.model.state2id(self.state_buffer)
+        if state in self.good_terminals:
+            r = 30.
+        elif state in self.bad_terminals:
+            r = -30
+        else:
+            r = -1.
+        return r
 
 
 class MDPUserModel(object):
@@ -113,57 +141,14 @@ class MDPUserModel(object):
             logger.warning('File "{0}" exists. Call with `overwrite=True` to permit overwrite.'.format(file_path))
 
 
-class MDPTask(object):
-    def __init__(self, environment, max_turns=100, good_terminal_state=9, bad_terminal_state=8):
-        self.env = environment
-        self.good_terminal_state = good_terminal_state
-        self.bad_terminal_state = bad_terminal_state
-        self.max_turns = max_turns
-        self.turn = 0
-        self.last_state = np.array([])   # keeping last state for enriching reward function
-        self.last_action = np.array([])  # keeping last action for enriching reward function
-
-    def reset(self, init_state=0):
-        self.env.reset(init_state)
-        self.turn = 0
-
-    def get_observations(self):
-        """ A filtered mapping to the observation of the underlying environment. """
-        return self.env.get_observations()
-
-    def is_done(self):
-        obs = self.get_observations()
-        obs_id = self.env.model.state2id(obs)
-        if obs_id == self.good_terminal_state or obs_id == self.bad_terminal_state or self.turn == self.max_turns:
-            return True
-        else:
-            return False
-
-    def step(self, action):
-        self.env.step(action)
-        self.turn += 1
-
-    def getReward(self):
-        obs = self.get_observations()
-        obs_id = self.env.model.state2id(obs)
-        if obs_id == self.good_terminal_state:
-            r = 30.
-        elif obs_id == self.bad_terminal_state:
-            r = -30
-        else:
-            r = -1.
-        return r
-
-
 class MDPExperiment(object):
-    def __init__(self, task, agent):
-        self.task = task
+    def __init__(self, env, agent):
+        self.env = env
         self.agent = agent
-        self.stepid = 0
-        self.laststate = []
-        self.turn = 0
+        self.last_state = None
+        self.step_id = 0
 
-    def do_episodes(self, number=1, isLearning=True, randomInit=True):
+    def do_episodes(self, number=1, is_learning=True, random_init=True):
         all_rewards = []
 
         for num in range(number):
@@ -173,18 +158,18 @@ class MDPExperiment(object):
             print('\n')
             self.agent.new_episode()
             rewards = []
-            self.turn = 0
-            if randomInit:
-                init_state = np.random.randint(0, self.task.env.model.num_states)
+            self.step_id = 0
+            if random_init:
+                init_state = np.random.randint(0, self.env.model.num_states)
             else:
                 init_state = 0
-            self.task.reset(init_state)
+            self.env.reset(init_state)
             self.agent.reset()
-            self.laststate = self.task.get_observations()
-            while not self.task.is_done():
+            self.last_state = self.env.get_observations()
+            while not self.env.is_done():
                 reward = self._step()
                 rewards.append(reward)
-                if isLearning and self.agent.learner.transitions.size >= self.agent.learner.minibatch_size:
+                if is_learning and self.agent.learner.transitions.size >= self.agent.learner.minibatch_size:
                     self.agent.learn()
             all_rewards.append(rewards)
         return all_rewards
@@ -198,36 +183,36 @@ class MDPExperiment(object):
             print('Evaluate episode: ', str(e_num))
             self.agent.new_episode()
             rewards = []
-            self.turn = 0
-            self.task.reset()
+            self.step_id = 0
+            self.env.reset()
             self.agent.reset()
-            self.laststate = self.task.get_observations()
-            while not self.task.is_done():
+            self.last_state = self.env.get_observations()
+            while not self.env.is_done():
                 reward = self._step(evaluate=True)
                 rewards.append(reward)
             all_rewards.append(rewards)
         return all_rewards
 
     def _step(self, evaluate=False):
-        self.turn += 1
-        print('last_state: ', self.laststate)
+        self.step_id += 1
+        print('last_state: ', self.last_state)
         if evaluate:
-            action = self.agent.module.get_max_action(self.laststate)  # no exploration
+            action = self.agent.module.get_max_action(self.last_state)  # no exploration
         else:
-            action = self.agent.get_action(self.laststate)
+            action = self.agent.get_action(self.last_state)
         print('action: ', action)
-        self.task.step(action)
-        reward = self.task.getReward()
+        self.env.step(action)
+        reward = self.env.get_reward()
         print('reward: ', reward)
-        new_state = self.task.get_observations()
+        new_state = self.env.get_observations()
         if not evaluate:
-            tr = Transition(current_state=self.laststate.astype('float32'),
+            tr = Transition(current_state=self.last_state.astype('float32'),
                             action=action,
                             reward=reward,
                             next_state=new_state.astype('float32'),
-                            term=int(self.task.is_done()))
+                            term=int(self.env.is_done()))
             self.agent.learner.transitions.add(tr)
-        self.laststate = new_state
+        self.last_state = new_state
         return reward
 
 

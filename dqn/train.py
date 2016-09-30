@@ -2,7 +2,7 @@ import pickle
 import random
 import numpy
 import yaml
-from rl import POMDPEnv, MDPTask, MDPExperiment, BiasedEpsilonGreedyExplorer, Agent, DQNLearner, QNetwork
+from rl import POMDPEnv, MDPExperiment, BiasedEpsilonGreedyExplorer, Agent, DQNLearner, QNetwork
 from utils import Font
 
 numpy.random.seed(seed=123)
@@ -16,15 +16,14 @@ learner = DQNLearner(params)
 learner.explorer = BiasedEpsilonGreedyExplorer(epsilon=params['explorer_params']['epsilon'],
                                                decay=params['explorer_params']['decay'])
 agent = Agent(actor, learner)
-user = POMDPEnv(confusion_dim=params['general']['confusion_dim'],
-                num_actual_states=params['general']['num_actual_state'],
-                num_actions=params['general']['num_actions'])
-task = MDPTask(environment=user,
-               max_turns=params['general']['max_turns'],
-               good_terminal_state=params['general']['good_terminal_state'],
-               bad_terminal_state=params['general']['bad_terminal_state'])
-expt = MDPExperiment(task=task, agent=agent)
-user.reset()
+env = POMDPEnv(confusion_dim=params['general']['confusion_dim'],
+               num_actual_states=params['general']['num_actual_state'],
+               num_actions=params['general']['num_actions'],
+               good_terminal_states=params['general']['good_terminal_state'],
+               bad_terminal_states=params['general']['bad_terminal_state'],
+               max_steps=params['general']['max_steps'])
+expt = MDPExperiment(env=env, agent=agent)
+env.reset()
 rewards_list = []
 
 for ex in range(params['general']['num_experiments']):
