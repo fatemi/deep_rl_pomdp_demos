@@ -27,7 +27,6 @@ class MDPExperiment(object):
         all_rewards = []
 
         for num in range(number):
-            sys.stdout.flush()
             print('='*30)
             print(Font.darkcyan + Font.bold + '::Episode::  ' + Font.end + str(num))
             self.agent.new_episode()
@@ -40,8 +39,10 @@ class MDPExperiment(object):
             self.env.reset(init_state)
             self.agent.reset()
             self.last_state = self.env.get_observations()
-            while not self.env.is_done():
-                reward = self._step()
+            term1 = False
+            # import ipdb; ipdb.set_trace()
+            while not term1:
+                reward, term1 = self._step()
                 rewards.append(reward)
                 if is_learning and self.agent.learner.transitions.size >= self.agent.learner.minibatch_size:
                     self.agent.learn()
@@ -62,7 +63,7 @@ class MDPExperiment(object):
             self.agent.reset()
             self.last_state = self.env.get_observations()
             while not self.env.is_done():
-                reward = self._step(evaluate=True)
+                reward, term = self._step(evaluate=True)
                 rewards.append(reward)
             all_rewards.append(rewards)
         return all_rewards
@@ -82,7 +83,7 @@ class MDPExperiment(object):
                             term=int(term))
             self.agent.learner.transitions.add(tr)
         self.last_state = new_state
-        return reward
+        return reward, term
 
 
 class BiasedEpsilonGreedyExplorer(object):
