@@ -1,5 +1,6 @@
 import numpy as np
 import sys
+import os
 import pickle
 from utils import Transition, TransitionTable, Font
 import logging
@@ -89,15 +90,27 @@ class MDPUserModel(object):
         s1 = s[self.confusion_dim:]
         return np.argmax(s1)
 
-    def write_mdp_to_dot(self, file='mdp.dot'):
-        # after calling this method use the following for example:
-        #    $ dot -T png -O mdp.dot
-        import networkx as nx
-        g = nx.DiGraph()
-        g.add_nodes_from(np.arange(self.num_states))
-        edges = [(tr[0], tr[2], {'label': tr[1]}) for tr in self.transition_table]
-        g.add_edges_from(edges)
-        nx.drawing.nx_pydot.write_dot(g, file)
+    def write_mdp_to_dot(self, file_path='mdp.dot', overwrite=False,
+                         init_state=0, good_terminals=9, bad_terminals=8):
+        # To save DOT files as image files use for example: $ dot -T png -O mdp.dot
+        if type(good_terminals) is int:
+            good_terminals = [good_terminals]
+        if type(bad_terminals) is int:
+            bad_terminals = [bad_terminals]
+        if not os.path.isfile(file_path) or overwrite:
+            with open(file_path, 'w') as writer:
+                writer.write('digraph MDP {\n')
+                for tr in self.transition_table:
+                    writer.write(str(tr[0]) + ' -> ' + str(tr[2]) +
+                                 ' [label="a:' + str(tr[1]) + ' ; p:' + str(tr[3]) + '"];\n')
+                writer.write(str(init_state) + " [shape=diamond,color=lightblue,style=filled]\n")
+                for node in good_terminals:
+                    writer.write(str(node) + " [shape=box,color=green,style=filled]\n")
+                for node in bad_terminals:
+                    writer.write(str(node) + " [shape=box,color=red,style=filled]\n")
+                writer.write('}')
+        else:
+            logger.warning('File "{0}" exists. Call with `overwrite=True` to permit overwrite.'.format(file_path))
 
 
 class MDPTask(object):
