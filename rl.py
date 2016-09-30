@@ -15,17 +15,17 @@ intX = 'int32'
 floatX = 'float32'
 
 
-class MDPUser(object):
+class POMDPEnv(object):
     def __init__(self, confusion_dim, num_actual_states, num_actions):
         self.outdim = 1
         self.model = MDPUserModel(confusion_dim, num_actual_states, num_actions)
         self.state_buffer = self.model.id2state(0)  # current state of the environment (use self.reset)
         self.turn = 0
 
-    def getSensors(self):
+    def get_observations(self):
         return self.state_buffer
 
-    def performAction(self, action):
+    def step(self, action):
         self.state_buffer = self.model.transition(self.state_buffer, action)
         self.turn += 1
 
@@ -115,24 +115,24 @@ class MDPTask(object):
         self.env.reset(init_state)
         self.turn = 0
 
-    def getObservation(self):
+    def get_observations(self):
         """ A filtered mapping to the observation of the underlying environment. """
-        return self.env.getSensors()
+        return self.env.get_observations()
 
-    def isFinished(self):
-        obs = self.getObservation()
+    def is_done(self):
+        obs = self.get_observations()
         obs_id = self.env.model.state2id(obs)
         if obs_id == self.good_terminal_state or obs_id == self.bad_terminal_state or self.turn == self.max_turns:
             return True
         else:
             return False
 
-    def performAction(self, action):
-        self.env.performAction(action)
+    def step(self, action):
+        self.env.step(action)
         self.turn += 1
 
     def getReward(self):
-        obs = self.getObservation()
+        obs = self.get_observations()
         obs_id = self.env.model.state2id(obs)
         if obs_id == self.good_terminal_state:
             r = 30.
@@ -168,8 +168,8 @@ class MDPExperiment(object):
                 init_state = 0
             self.task.reset(init_state)
             self.agent.reset()
-            self.laststate = self.task.getObservation()
-            while not self.task.isFinished():
+            self.laststate = self.task.get_observations()
+            while not self.task.is_done():
                 reward = self._oneInteraction()
                 rewards.append(reward)
                 if isLearning and self.agent.learner.transitions.size >= self.agent.learner.minibatch_size:
@@ -189,8 +189,8 @@ class MDPExperiment(object):
             self.turn = 0
             self.task.reset()
             self.agent.reset()
-            self.laststate = self.task.getObservation()
-            while not self.task.isFinished():
+            self.laststate = self.task.get_observations()
+            while not self.task.is_done():
                 reward = self._oneInteraction(evaluate=True)
                 rewards.append(reward)
             all_rewards.append(rewards)
@@ -204,16 +204,16 @@ class MDPExperiment(object):
         else:
             action = self.agent.getAction(self.laststate)
         print('action: ', action)
-        self.task.performAction(action)
+        self.task.step(action)
         reward = self.task.getReward()
         print('reward: ', reward)
-        new_state = self.task.getObservation()
+        new_state = self.task.get_observations()
         if not evaluate:
             tr = Transition(current_state=self.laststate.astype('float32'),
                             action=action,
                             reward=reward,
                             next_state=new_state.astype('float32'),
-                            term=int(self.task.isFinished()))
+                            term=int(self.task.is_done()))
             self.agent.learner.transitions.add(tr)
         self.laststate = new_state
         return reward
