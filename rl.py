@@ -311,8 +311,6 @@ class QNetwork(object):
             will be returned.
         """
         values_array = self.get_action_values(states)
-        # print '>>>>> ACTION VALUES:'
-        # print values_array
         actions = []
         for values in values_array:
             action = np.where(values == max(values))[0]  # maybe more than one
@@ -330,7 +328,6 @@ class QNetwork(object):
         else:
             minibatch_size = states.shape[0]
         no_mask = np.ones((minibatch_size, self.numActions), dtype=floatX)
-
         # return self.network.predict(states)
         output = self.network.predict({'states': states, 'actions_mask': no_mask})
         return output
@@ -453,7 +450,7 @@ class DQNLearner(Learner):
         self.update_counter = 0
         self.ddqn = params['learning_params'].get('ddqn', True)
 
-    def _getQTarget(self, a, r, s2, term):
+    def _get_q_target(self, a, r, s2, term):
         # q_target = r + (1-terminal) * gamma * max_a Q_target(s2, a)
         term = (1 - term).astype(floatX)
 
@@ -482,7 +479,7 @@ class DQNLearner(Learner):
         return targets, q_target, q2_max
 
     def _train_on_batch(self, s, a, r, s2, term):
-        targets, delta, q2_max = self._getQTarget(a=a, r=r, s2=s2, term=term)
+        targets, delta, q2_max = self._get_q_target(a=a, r=r, s2=s2, term=term)
         a_mask = np.zeros((self.minibatch_size, self.n_actions), dtype=floatX)
         for i in range(self.minibatch_size):
             a_mask[i, int(a[i])] = 1.
