@@ -2,7 +2,8 @@ import pickle
 import random
 import numpy
 import yaml
-from rl import POMDPEnv, MDPExperiment, BiasedEpsilonGreedyExplorer, Agent, DQNLearner, QNetwork
+from rl import MDPExperiment, BiasedEpsilonGreedyExplorer, Agent, DQNLearner, QNetwork
+from environment import POMDPEnv
 from utils import Font
 
 numpy.random.seed(seed=123)

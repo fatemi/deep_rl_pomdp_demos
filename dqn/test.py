@@ -1,7 +1,7 @@
 import pickle
 import numpy
 import yaml
-from rl import MDPUserModel
+from environment import MDPUserModel
 
 CONFIG_FILE = 'dqn/config.cfg'
 params = yaml.safe_load(open(CONFIG_FILE, 'r'))
