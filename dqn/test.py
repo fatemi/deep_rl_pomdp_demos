@@ -11,7 +11,8 @@ def main():
     r, ir = numpy.load('confusion.npz.npy')
     m = MDPUserModel(confusion_dim=params['general']['confusion_dim'],
                      num_actual_states=params['general']['num_actual_state'],
-                     num_actions=params['general']['num_actions'])
+                     num_actions=params['general']['num_actions'],
+                     make_confusion_matrix=False)
     m.randproj = r
     m.invrandproj = ir
     with open('dqn_controller.pkl', 'rb') as f:
@@ -21,8 +22,7 @@ def main():
 
     for s in range(10):
         state = m.state2obs(s)
-        print('action for state ', s, 'state2id', m.obs2state(state), ' : ', str(actor.get_max_action(state,
-                                                                                                      target=False)[0]))
+        print('state: ', s, ' | action: ', str(actor.get_max_action(state, target=False)[0]))
 
 if __name__ == '__main__':
     main()

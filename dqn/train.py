@@ -6,6 +6,7 @@ from lib import MDPExperiment, BiasedEpsilonGreedyExplorer, Agent, DQNLearner, Q
 from environment import POMDPEnv
 from utils import Font
 
+np.set_printoptions(suppress=True, linewidth=200, precision=2)
 np.random.seed(seed=123)
 random.seed(123)
 
