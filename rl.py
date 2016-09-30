@@ -279,16 +279,20 @@ class QNetwork(object):
         actions, and the maximal action is returned. This network is used
         for the NFQ algorithm. """
 
-    def __init__(self, params, optimizer=None, name=None, no_network=False):
+    def __init__(self, params, optimizer=None, no_network=False):
         if not no_network:
-            self.network = create_model(params, optimizer)
-            self.target_network = create_model(params, optimizer)
+            self.network = self.build(params, optimizer)
+            self.target_network = self.build(params, optimizer)
             weight_transfer(from_model=self.network, to_model=self.target_network)
         else:
             self.network = []
             self.target_network = []
         self.numActions = params['general']['num_actions']
         self.state_dim = params['general']['state_dim']
+
+    def build(self, params, optimizer=None):
+        model = create_model(params, optimizer)
+        return model
 
     def get_max_action(self, states):
         """ Return the action with the maximal value for the given state(s).
