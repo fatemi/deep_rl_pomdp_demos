@@ -20,9 +20,9 @@ def main():
     actor.load_network(network_file_path='q_network.json', weights_file_path='q_network_weights.h5', target=False)
 
     for s in range(10):
-        state = m.id2state(s)
-        print('action for state ', s, 'state2id', m.state2id(state), ' : ', str(actor.get_max_action(state,
-                                                                                                     target=False)[0]))
+        state = m.state2obs(s)
+        print('action for state ', s, 'state2id', m.obs2state(state), ' : ', str(actor.get_max_action(state,
+                                                                                                      target=False)[0]))
 
 if __name__ == '__main__':
     main()

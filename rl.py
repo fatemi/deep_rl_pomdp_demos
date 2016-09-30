@@ -20,7 +20,7 @@ class POMDPEnv(object):
     def __init__(self, confusion_dim, num_actual_states, num_actions, good_terminal_states=9, bad_terminal_states=8,
                  max_steps=1000):
         self.model = MDPUserModel(confusion_dim, num_actual_states, num_actions)
-        self.state_buffer = self.model.id2state(0)  # current state of the environment (use self.reset)
+        self.state_buffer = self.model.state2obs(0)  # current state of the environment (use self.reset)
         self.turn = 0
         if type(good_terminal_states) is int:
             self.good_terminals = [good_terminal_states]
@@ -36,23 +36,23 @@ class POMDPEnv(object):
         return self.state_buffer
 
     def step(self, action):
-        self.state_buffer = self.model.transition(self.state_buffer, action)
+        self.state_buffer = self.model.step(self.state_buffer, action)
         self.turn += 1
         return self.state_buffer, self.get_reward(), self.is_done(), {}  # no additional information
 
     def reset(self, init_state=0):
-        self.state_buffer = self.model.id2state(init_state)
+        self.state_buffer = self.model.state2obs(init_state)
         self.turn = 0
 
     def is_done(self):
-        obs_id = self.model.state2id(self.state_buffer)
+        obs_id = self.model.obs2state(self.state_buffer)
         if obs_id == self.good_terminals or obs_id == self.bad_terminals or self.turn >= self.max_steps:
             return True
         else:
             return False
 
     def get_reward(self):
-        state = self.model.state2id(self.state_buffer)
+        state = self.model.obs2state(self.state_buffer)
         if state in self.good_terminals:
             r = 30.
         elif state in self.bad_terminals:
@@ -89,19 +89,19 @@ class MDPUserModel(object):
             [6, 3, 8],
             [7, 3, 9]], dtype='int32')
 
-    def transition(self, state, action):
-        state_id = self.state2id(state)
+    def step(self, state, action):
+        state_id = self.obs2state(state)
         assert state_id < self.num_states and action < self.num_actions
         next_state_id = state_id
         for t in self.transition_table:
             if t[0] == state_id and t[1] == action:
                 next_state_id = t[2]
                 break
-        return self.id2state(next_state_id)
+        return self.state2obs(next_state_id)
 
-    def id2state(self, s_id):
+    def state2obs(self, s_id):
         s = np.zeros(self.num_states + self.confusion_dim, dtype='float32')
-        #s[: self.confusion_dim] = numpy.random.randint(0, 2, self.confusion_dim)
+        # s[: self.confusion_dim] = numpy.random.randint(0, 2, self.confusion_dim)
         s[: self.confusion_dim] = np.random.uniform(-.5, .5, size=self.confusion_dim)
         s[self.confusion_dim + s_id] = 1.
         if not hasattr(self, "randproj"):
@@ -113,7 +113,7 @@ class MDPUserModel(object):
         s = np.dot(self.randproj, s)
         return s
 
-    def state2id(self, s):
+    def obs2state(self, s):
         s = np.dot(self.invrandproj, s)
         s1 = s[self.confusion_dim:]
         return np.argmax(s1)
@@ -155,7 +155,6 @@ class MDPExperiment(object):
             sys.stdout.flush()
             print('='*30)
             print(Font.darkcyan + Font.bold + '::Episode::  ' + Font.end + str(num))
-            print('\n')
             self.agent.new_episode()
             rewards = []
             self.step_id = 0
@@ -195,22 +194,17 @@ class MDPExperiment(object):
 
     def _step(self, evaluate=False):
         self.step_id += 1
-        print('last_state: ', self.last_state)
         if evaluate:
             action = self.agent.module.get_max_action(self.last_state)  # no exploration
         else:
             action = self.agent.get_action(self.last_state)
-        print('action: ', action)
-        self.env.step(action)
-        reward = self.env.get_reward()
-        print('reward: ', reward)
-        new_state = self.env.get_observations()
+        new_state, reward, term, info = self.env.step(action)
         if not evaluate:
             tr = Transition(current_state=self.last_state.astype('float32'),
                             action=action,
                             reward=reward,
                             next_state=new_state.astype('float32'),
-                            term=int(self.env.is_done()))
+                            term=int(term))
             self.agent.learner.transitions.add(tr)
         self.last_state = new_state
         return reward
@@ -228,10 +222,6 @@ class BiasedEpsilonGreedyExplorer(object):
         self.module = None
 
     def __call__(self, state, action):
-        """ Draws a random number between 0 and 1. If the number is less
-            than epsilon, a random action is chosen. If it is equal or
-            larger than epsilon, the greedy action is returned.
-        """
         assert self.module
         if self.prior is None:
             self.prior = np.ones(self.module.numActions, dtype=floatX) / self.module.numActions  # equiprobable
@@ -252,11 +242,10 @@ class Agent(object):
             self.learner.explorer.module = actor
 
     def learn(self, episodes=1, *args, **kwargs):
-        return self.learner.learnEpisodes(episodes, *args, **kwargs)
+        return self.learner.learn_episodes(episodes, *args, **kwargs)
 
     def get_action(self, obs):
-        """ Gets action for the module with the last observation and add the exploration.
-        """
+        """ Gets action for the module with the last observation and add the exploration. """
         action = self.actor.get_max_action(obs, target=False)
         if self.learner:
             action = self.learner.explore(obs, action)
@@ -273,12 +262,6 @@ class Agent(object):
 
 
 class QNetwork(object):
-    """ A network that approximates action values for continuous state /
-        discrete action RL environments. To receive the maximum action
-        for a given state, a forward pass is executed for all discrete
-        actions, and the maximal action is returned. This network is used
-        for the NFQ algorithm. """
-
     def __init__(self, params, optimizer=None, no_network=False):
         if not no_network:
             self.network = self.build(params, optimizer)
@@ -330,7 +313,7 @@ class QNetwork(object):
             q[i] = values[i, single_a]
         return q
 
-    def _target_network_update(self):
+    def target_network_update(self):
         self.weight_transfer(from_model=self.network, to_model=self.target_network)
 
     def __getstate__(self):
@@ -363,16 +346,14 @@ class QNetwork(object):
         self.network.load_weights(weights_file_path)
         if target:
             self.target_network = model_from_json(open(network_file_path).read())
-            self._target_network_update()
+            self.target_network_update()
 
     def reset(self):
         pass
 
 
 class Learner(object):
-    """
-    Top-level class for all reinforcement learning algorithms.
-    """
+    """ Top-level class for all reinforcement learning algorithms. """
     module = None
     explorer = None
 
@@ -387,8 +368,8 @@ class Learner(object):
             logging.warning("No explorer found: no exploration could be done.")
             return action
 
-    def learnEpisodes(self, episodes=1, *args, **kwargs):
-        """ learn on the current dataset, for a number of episodes """
+    def learn_episodes(self, episodes=1, *args, **kwargs):
+        """ learn on the current replay pool, for given num episodes """
         for _ in range(episodes):
             self.learn(*args, **kwargs)
 
@@ -397,12 +378,6 @@ class Learner(object):
 
 
 class DQNLearner(Learner):
-    """ DQN Learner class.
-    It provides the learning for a Q-network controller/interface
-
-    Notice:
-    the 'module' attribute of this learner should be QNetwork
-    """
     def __init__(self, params):
         self.replay_max_size = params['learning_params']['replay_max_size']
         self.gamma = params['learning_params']['discount']
@@ -418,9 +393,7 @@ class DQNLearner(Learner):
     def _get_q_target(self, a, r, s2, term):
         # q_target = r + (1-terminal) * gamma * max_a Q_target(s2, a)
         term = (1 - term).astype(floatX)
-
         # Compute max_a Q(s_2, a).
-        # q2_max = self.module.getTargetActionValues(s2).max(axis=1)
         if self.ddqn:
             a_max = self.module.get_max_action(s2, target=False)
             q2_max = self.module.get_action_values(s2, target=True)
@@ -432,7 +405,6 @@ class DQNLearner(Learner):
         if self.rescale_r:
             r /= self.r_divider
         q_target = r + q2
-        # neural network targets for states in the minibatch
         targets = np.zeros((self.minibatch_size, self.n_actions))
         for i in range(self.minibatch_size):
             targets[i, int(a[i])] = q_target[i]
@@ -443,11 +415,10 @@ class DQNLearner(Learner):
         a_mask = np.zeros((self.minibatch_size, self.n_actions), dtype=floatX)
         for i in range(self.minibatch_size):
             a_mask[i, int(a[i])] = 1.
-        # objective = self.module.network.train_on_batch(s, targets)
         objective = self.module.network.train_on_batch(x={'states': s, 'actions_mask': a_mask}, y={'output': targets})
         # updating target network
         if self.update_counter == self.update_freq:
-            self.module._target_network_update()
+            self.module.target_network_update()
             self.update_counter = 0
         else:
             self.update_counter += 1
@@ -458,11 +429,9 @@ class DQNLearner(Learner):
         Learning from one minibatch .
         """
         assert self.minibatch_size <= self.transitions.size, 'not enough data in the pool'
-        # print colour_str('>>> Learner'+'-'*89, 36)
         # sampling one minibatch
         s, a, r, s2, term = self.transitions.sample(self.minibatch_size)
         objective = self._train_on_batch(s, a, r, s2, term)
-        # print colour_str('<<< Learner'+'-'*89, 36)
         return objective
 
     def learn_offline_batch(self, nb_epochs=1, minibatch_size=128, reset=True):
@@ -492,7 +461,7 @@ class ResourceManager(object):
 
 
 def create_model(params, optimizer=None):
-    # returns the keras nn model
+    # returns the keras nn compiled model
     input_dim = params['general']['state_dim']
     states = Input(shape=(input_dim,), dtype=floatX, name='states')
     x = Dense(input_dim=input_dim,
