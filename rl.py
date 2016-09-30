@@ -6,8 +6,8 @@ from utils import Transition, TransitionTable, Font
 import logging
 from copy import deepcopy
 import yaml
-from keras.optimizers import SGD, RMSprop, Adagrad, Adadelta
-from keras.layers.core import Dense, Dropout, Activation
+from keras.optimizers import Adadelta
+from keras.layers.core import Dense, Dropout
 from keras.models import model_from_json, Model
 from keras.layers import Input, merge
 
