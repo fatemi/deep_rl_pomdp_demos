@@ -283,7 +283,7 @@ class QNetwork(object):
         if not no_network:
             self.network = self.build(params, optimizer)
             self.target_network = self.build(params, optimizer)
-            weight_transfer(from_model=self.network, to_model=self.target_network)
+            self.weight_transfer(from_model=self.network, to_model=self.target_network)
         else:
             self.network = []
             self.target_network = []
@@ -331,13 +331,17 @@ class QNetwork(object):
         return q
 
     def _target_network_update(self):
-        weight_transfer(from_model=self.network, to_model=self.target_network)
+        self.weight_transfer(from_model=self.network, to_model=self.target_network)
 
     def __getstate__(self):
         d = {k: v for k, v in self.__dict__.items()}
         del d['network']
         del d['target_network']
         return d
+
+    @staticmethod
+    def weight_transfer(from_model, to_model):
+        to_model.set_weights(deepcopy(from_model.get_weights()))
 
     def dump_network(self,
                      dqn_controller_file='dqn_controller.pkl',
@@ -505,7 +509,3 @@ def create_model(params, optimizer=None):
     model = Model(input=[states, actions_mask], output=[output])
     model.compile(loss={'output': 'mean_squared_error'}, optimizer=Adadelta())
     return model
-
-
-def weight_transfer(from_model, to_model):
-    to_model.set_weights(deepcopy(from_model.get_weights()))
