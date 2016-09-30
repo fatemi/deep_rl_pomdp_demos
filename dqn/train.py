@@ -31,7 +31,7 @@ for ex in range(params['general']['num_experiments']):
     print('\n')
     print(Font.bold + Font.red + '>>>>> Experiment ', ex, ' >>>>>' + Font.end)
     # time.sleep(.5)
-    rewards = expt.doInteractions(params['general']['num_episodes'])
+    rewards = expt.do_episodes(params['general']['num_episodes'])
     rewards_list.append(rewards)
 
 actor.dump_network()

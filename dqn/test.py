@@ -21,7 +21,7 @@ def main():
 
     for s in range(10):
         state = m.id2state(s)
-        print('action for state ', s, 'state2id', m.state2id(state), ' : ', str(actor.getMaxAction(state)[0]))
+        print('action for state ', s, 'state2id', m.state2id(state), ' : ', str(actor.get_max_action(state)[0]))
 
 if __name__ == '__main__':
     main()
