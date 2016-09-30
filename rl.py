@@ -1,5 +1,6 @@
 import numpy as np
 import sys
+import os
 import pickle
 from utils import Transition, TransitionTable, Font
 import logging
@@ -15,17 +16,16 @@ intX = 'int32'
 floatX = 'float32'
 
 
-class MDPUser(object):
+class POMDPEnv(object):
     def __init__(self, confusion_dim, num_actual_states, num_actions):
-        self.outdim = 1
         self.model = MDPUserModel(confusion_dim, num_actual_states, num_actions)
         self.state_buffer = self.model.id2state(0)  # current state of the environment (use self.reset)
         self.turn = 0
 
-    def getSensors(self):
+    def get_observations(self):
         return self.state_buffer
 
-    def performAction(self, action):
+    def step(self, action):
         self.state_buffer = self.model.transition(self.state_buffer, action)
         self.turn += 1
 
@@ -90,15 +90,27 @@ class MDPUserModel(object):
         s1 = s[self.confusion_dim:]
         return np.argmax(s1)
 
-    def write_mdp_to_dot(self, file='mdp.dot'):
-        # after calling this method use the following for example:
-        #    $ dot -T png -O mdp.dot
-        import networkx as nx
-        g = nx.DiGraph()
-        g.add_nodes_from(np.arange(self.num_states))
-        edges = [(tr[0], tr[2], {'label': tr[1]}) for tr in self.transition_table]
-        g.add_edges_from(edges)
-        nx.drawing.nx_pydot.write_dot(g, file)
+    def write_mdp_to_dot(self, file_path='mdp.dot', overwrite=False,
+                         init_state=0, good_terminals=9, bad_terminals=8):
+        # To save DOT files as image files use for example: $ dot -T png -O mdp.dot
+        if type(good_terminals) is int:
+            good_terminals = [good_terminals]
+        if type(bad_terminals) is int:
+            bad_terminals = [bad_terminals]
+        if not os.path.isfile(file_path) or overwrite:
+            with open(file_path, 'w') as writer:
+                writer.write('digraph MDP {\n')
+                for tr in self.transition_table:
+                    writer.write(str(tr[0]) + ' -> ' + str(tr[2]) +
+                                 ' [label="a:' + str(tr[1]) + ' ; p:' + str(tr[3]) + '"];\n')
+                writer.write(str(init_state) + " [shape=diamond,color=lightblue,style=filled]\n")
+                for node in good_terminals:
+                    writer.write(str(node) + " [shape=box,color=green,style=filled]\n")
+                for node in bad_terminals:
+                    writer.write(str(node) + " [shape=box,color=red,style=filled]\n")
+                writer.write('}')
+        else:
+            logger.warning('File "{0}" exists. Call with `overwrite=True` to permit overwrite.'.format(file_path))
 
 
 class MDPTask(object):
@@ -115,24 +127,24 @@ class MDPTask(object):
         self.env.reset(init_state)
         self.turn = 0
 
-    def getObservation(self):
+    def get_observations(self):
         """ A filtered mapping to the observation of the underlying environment. """
-        return self.env.getSensors()
+        return self.env.get_observations()
 
-    def isFinished(self):
-        obs = self.getObservation()
+    def is_done(self):
+        obs = self.get_observations()
         obs_id = self.env.model.state2id(obs)
         if obs_id == self.good_terminal_state or obs_id == self.bad_terminal_state or self.turn == self.max_turns:
             return True
         else:
             return False
 
-    def performAction(self, action):
-        self.env.performAction(action)
+    def step(self, action):
+        self.env.step(action)
         self.turn += 1
 
     def getReward(self):
-        obs = self.getObservation()
+        obs = self.get_observations()
         obs_id = self.env.model.state2id(obs)
         if obs_id == self.good_terminal_state:
             r = 30.
@@ -151,7 +163,7 @@ class MDPExperiment(object):
         self.laststate = []
         self.turn = 0
 
-    def doInteractions(self, number=1, isLearning=True, randomInit=True):
+    def do_episodes(self, number=1, isLearning=True, randomInit=True):
         all_rewards = []
 
         for num in range(number):
@@ -159,7 +171,7 @@ class MDPExperiment(object):
             print('='*30)
             print(Font.darkcyan + Font.bold + '::Episode::  ' + Font.end + str(num))
             print('\n')
-            self.agent.newEpisode()
+            self.agent.new_episode()
             rewards = []
             self.turn = 0
             if randomInit:
@@ -168,9 +180,9 @@ class MDPExperiment(object):
                 init_state = 0
             self.task.reset(init_state)
             self.agent.reset()
-            self.laststate = self.task.getObservation()
-            while not self.task.isFinished():
-                reward = self._oneInteraction()
+            self.laststate = self.task.get_observations()
+            while not self.task.is_done():
+                reward = self._step()
                 rewards.append(reward)
                 if isLearning and self.agent.learner.transitions.size >= self.agent.learner.minibatch_size:
                     self.agent.learn()
@@ -184,36 +196,36 @@ class MDPExperiment(object):
 
         for e_num in range(number):
             print('Evaluate episode: ', str(e_num))
-            self.agent.newEpisode()
+            self.agent.new_episode()
             rewards = []
             self.turn = 0
             self.task.reset()
             self.agent.reset()
-            self.laststate = self.task.getObservation()
-            while not self.task.isFinished():
-                reward = self._oneInteraction(evaluate=True)
+            self.laststate = self.task.get_observations()
+            while not self.task.is_done():
+                reward = self._step(evaluate=True)
                 rewards.append(reward)
             all_rewards.append(rewards)
         return all_rewards
 
-    def _oneInteraction(self, evaluate=False):
+    def _step(self, evaluate=False):
         self.turn += 1
         print('last_state: ', self.laststate)
         if evaluate:
-            action = self.agent.module.getMaxAction(self.laststate)  # no exploration
+            action = self.agent.module.get_max_action(self.laststate)  # no exploration
         else:
-            action = self.agent.getAction(self.laststate)
+            action = self.agent.get_action(self.laststate)
         print('action: ', action)
-        self.task.performAction(action)
+        self.task.step(action)
         reward = self.task.getReward()
         print('reward: ', reward)
-        new_state = self.task.getObservation()
+        new_state = self.task.get_observations()
         if not evaluate:
             tr = Transition(current_state=self.laststate.astype('float32'),
                             action=action,
                             reward=reward,
                             next_state=new_state.astype('float32'),
-                            term=int(self.task.isFinished()))
+                            term=int(self.task.is_done()))
             self.agent.learner.transitions.add(tr)
         self.laststate = new_state
         return reward
@@ -257,15 +269,15 @@ class Agent(object):
     def learn(self, episodes=1, *args, **kwargs):
         return self.learner.learnEpisodes(episodes, *args, **kwargs)
 
-    def getAction(self, obs):
+    def get_action(self, obs):
         """ Gets action for the module with the last observation and add the exploration.
         """
-        action = self.module.getMaxAction(obs)
+        action = self.module.get_max_action(obs)
         if self.learner:
             action = self.learner.explore(obs, action)
         return action
 
-    def newEpisode(self):
+    def new_episode(self):
         """ Indicate the beginning of a new episode in the training cycle. """
         self.module.reset()
         self.learner.reset()
@@ -293,12 +305,12 @@ class QNetwork(object):
         self.numActions = params['general']['num_actions']
         self.state_dim = params['general']['state_dim']
 
-    def getMaxAction(self, states):
+    def get_max_action(self, states):
         """ Return the action with the maximal value for the given state(s).
             If there are more than one of such actions, one of them in random
             will be returned.
         """
-        values_array = self.getActionValues(states)
+        values_array = self.get_action_values(states)
         # print '>>>>> ACTION VALUES:'
         # print values_array
         actions = []
@@ -307,7 +319,7 @@ class QNetwork(object):
             actions.append(np.random.choice(action))
         return np.array(actions, dtype=intX)
 
-    def getActionValues(self, states):
+    def get_action_values(self, states):
         """ Run forward activation of the QNetwork.
             :param states: Each row of states is one state.
             :return same num of rows as states and num cols as num of actions
@@ -323,8 +335,8 @@ class QNetwork(object):
         output = self.network.predict({'states': states, 'actions_mask': no_mask})
         return output
 
-    def getValues(self, states, actions):
-        values = self.getActionValues(states)
+    def get_values(self, states, actions):
+        values = self.get_action_values(states)
         q = np.zeros_like(actions, dtype=floatX)
         for i, single_a in enumerate(actions):
             q[i] = values[i, single_a]
@@ -360,7 +372,7 @@ class QNetwork(object):
             q[i] = values[i, single_a]
         return q
 
-    def targetNetworkUpdate(self):
+    def _target_network_update(self):
         weight_transfer(from_model=self.network, to_model=self.target_network)
 
     def __getstate__(self):
@@ -389,7 +401,7 @@ class QNetwork(object):
         self.network.load_weights(weights_file_path)
         if target:
             self.target_network = model_from_json(open(network_file_path).read())
-            self.targetNetworkUpdate()
+            self._target_network_update()
 
     def reset(self):
         pass
@@ -448,7 +460,7 @@ class DQNLearner(Learner):
         # Compute max_a Q(s_2, a).
         # q2_max = self.module.getTargetActionValues(s2).max(axis=1)
         if self.ddqn:
-            a_max = self.module.getMaxAction(s2)
+            a_max = self.module.get_max_action(s2)
             q2_max = self.module.getTargetActionValues(s2)
             q2_max = np.array([q2_max[i, a_max[i]] for i in range(q2_max.shape[0])], dtype=floatX)
         else:
@@ -478,7 +490,7 @@ class DQNLearner(Learner):
         objective = self.module.network.train_on_batch(x={'states': s, 'actions_mask': a_mask}, y={'output': targets})
         # updating target network
         if self.update_counter == self.update_freq:
-            self.module.targetNetworkUpdate()
+            self.module._target_network_update()
             self.update_counter = 0
         else:
             self.update_counter += 1

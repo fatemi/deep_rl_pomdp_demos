@@ -2,7 +2,7 @@ import pickle
 import random
 import numpy
 import yaml
-from rl import MDPUser, MDPTask, MDPExperiment, BiasedEpsilonGreedyExplorer, Agent, DQNLearner, QNetwork
+from rl import POMDPEnv, MDPTask, MDPExperiment, BiasedEpsilonGreedyExplorer, Agent, DQNLearner, QNetwork
 from utils import Font
 
 numpy.random.seed(seed=123)
@@ -16,9 +16,9 @@ learner = DQNLearner(params)
 learner.explorer = BiasedEpsilonGreedyExplorer(epsilon=params['explorer_params']['epsilon'],
                                                decay=params['explorer_params']['decay'])
 agent = Agent(actor, learner)
-user = MDPUser(confusion_dim=params['general']['confusion_dim'],
-               num_actual_states=params['general']['num_actual_state'],
-               num_actions=params['general']['num_actions'])
+user = POMDPEnv(confusion_dim=params['general']['confusion_dim'],
+                num_actual_states=params['general']['num_actual_state'],
+                num_actions=params['general']['num_actions'])
 task = MDPTask(environment=user,
                max_turns=params['general']['max_turns'],
                good_terminal_state=params['general']['good_terminal_state'],
@@ -31,7 +31,7 @@ for ex in range(params['general']['num_experiments']):
     print('\n')
     print(Font.bold + Font.red + '>>>>> Experiment ', ex, ' >>>>>' + Font.end)
     # time.sleep(.5)
-    rewards = expt.doInteractions(params['general']['num_episodes'])
+    rewards = expt.do_episodes(params['general']['num_episodes'])
     rewards_list.append(rewards)
 
 actor.dump_network()
