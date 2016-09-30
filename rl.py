@@ -244,12 +244,12 @@ class BiasedEpsilonGreedyExplorer(object):
 
 
 class Agent(object):
-    def __init__(self, module, learner=None):
-        self.module = module
+    def __init__(self, actor, learner=None):
+        self.actor = actor
         self.learner = learner
         if learner:
-            self.learner.module = module
-            self.learner.explorer.module = module
+            self.learner.module = actor
+            self.learner.explorer.module = actor
 
     def learn(self, episodes=1, *args, **kwargs):
         return self.learner.learnEpisodes(episodes, *args, **kwargs)
@@ -257,18 +257,18 @@ class Agent(object):
     def get_action(self, obs):
         """ Gets action for the module with the last observation and add the exploration.
         """
-        action = self.module.get_max_action(obs)
+        action = self.actor.get_max_action(obs)
         if self.learner:
             action = self.learner.explore(obs, action)
         return action
 
     def new_episode(self):
         """ Indicate the beginning of a new episode in the training cycle. """
-        self.module.reset()
+        self.actor.reset()
         self.learner.reset()
 
     def reset(self):
-        self.module.reset()
+        self.actor.reset()
         self.learner.reset()
 
 
