@@ -257,7 +257,7 @@ class Agent(object):
     def get_action(self, obs):
         """ Gets action for the module with the last observation and add the exploration.
         """
-        action = self.actor.get_max_action(obs)
+        action = self.actor.get_max_action(obs, target=False)
         if self.learner:
             action = self.learner.explore(obs, action)
         return action
@@ -294,19 +294,19 @@ class QNetwork(object):
         model = create_model(params, optimizer)
         return model
 
-    def get_max_action(self, states):
+    def get_max_action(self, states, target):
         """ Return the action with the maximal value for the given state(s).
             If there are more than one of such actions, one of them in random
             will be returned.
         """
-        values_array = self.get_action_values(states)
+        values_array = self.get_action_values(states, target)
         actions = []
         for values in values_array:
             action = np.where(values == max(values))[0]  # maybe more than one
             actions.append(np.random.choice(action))
         return np.array(actions, dtype=intX)
 
-    def get_action_values(self, states):
+    def get_action_values(self, states, target):
         """ Run forward activation of the QNetwork.
             :param states: Each row of states is one state.
             :return same num of rows as states and num cols as num of actions
@@ -317,42 +317,14 @@ class QNetwork(object):
         else:
             minibatch_size = states.shape[0]
         no_mask = np.ones((minibatch_size, self.numActions), dtype=floatX)
-        # return self.network.predict(states)
-        output = self.network.predict({'states': states, 'actions_mask': no_mask})
+        if target:
+            output = self.target_network.predict({'states': states, 'actions_mask': no_mask})
+        else:
+            output = self.network.predict({'states': states, 'actions_mask': no_mask})
         return output
 
-    def get_values(self, states, actions):
-        values = self.get_action_values(states)
-        q = np.zeros_like(actions, dtype=floatX)
-        for i, single_a in enumerate(actions):
-            q[i] = values[i, single_a]
-        return q
-
-    def getTargetMaxAction(self, states):
-        """ Return the action with the maximal value for the given state.
-            If there are more than one of such actions, one of them in random
-            will be returned.
-        """
-        values_array = self.getTargetActionValues(states)
-        actions = []
-        for values in values_array:
-            action = np.where(values == max(values))[0]  # maybe more than one
-            actions.append(np.random.choice(action))
-        return np.array(actions, dtype=intX)
-
-    def getTargetActionValues(self, states):
-        """ Run forward activation of the QNetwork.
-            :param states: Each row of states is one state.
-            :return same num of rows as states and num cols as num of actions
-        """
-        minibatch_size = states.shape[0]
-        no_mask = np.ones((minibatch_size, self.numActions), dtype=floatX)
-        # return self.target_network.predict(states)
-        output = self.target_network.predict({'states': states, 'actions_mask': no_mask})
-        return output
-
-    def getTargetValues(self, states, actions):
-        values = self.getTargetActionValues(states)
+    def get_values(self, states, actions, target):
+        values = self.get_action_values(states, target)
         q = np.zeros_like(actions, dtype=floatX)
         for i, single_a in enumerate(actions):
             q[i] = values[i, single_a]
@@ -446,25 +418,20 @@ class DQNLearner(Learner):
         # Compute max_a Q(s_2, a).
         # q2_max = self.module.getTargetActionValues(s2).max(axis=1)
         if self.ddqn:
-            a_max = self.module.get_max_action(s2)
-            q2_max = self.module.getTargetActionValues(s2)
+            a_max = self.module.get_max_action(s2, target=False)
+            q2_max = self.module.get_action_values(s2, target=True)
             q2_max = np.array([q2_max[i, a_max[i]] for i in range(q2_max.shape[0])], dtype=floatX)
         else:
-            q2_max = self.module.getTargetActionValues(s2).max(axis=1)
-
+            q2_max = self.module.get_action_values(s2, target=True).max(axis=1)
         # Compute q2 = (1-terminal) * gamma * max_a Q(s2, a)
         q2 = self.gamma * q2_max * term
-
         if self.rescale_r:
             r /= self.r_divider
-
         q_target = r + q2
-
         # neural network targets for states in the minibatch
         targets = np.zeros((self.minibatch_size, self.n_actions))
         for i in range(self.minibatch_size):
             targets[i, int(a[i])] = q_target[i]
-
         return targets, q_target, q2_max
 
     def _train_on_batch(self, s, a, r, s2, term):
