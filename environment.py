@@ -36,8 +36,8 @@ class POMDPEnv(object):
         self.turn = 0
 
     def is_done(self):
-        obs_id = self.model.obs2state(self.state_buffer)
-        if obs_id == self.good_terminals or obs_id == self.bad_terminals or self.turn >= self.max_steps:
+        state = self.model.obs2state(self.state_buffer)
+        if state in self.good_terminals or state in self.bad_terminals or self.turn >= self.max_steps:
             return True
         else:
             return False
