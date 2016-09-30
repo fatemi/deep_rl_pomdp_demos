@@ -10,7 +10,7 @@ floatX = 'float32'
 class POMDPEnv(object):
     def __init__(self, confusion_dim, num_actual_states, num_actions, good_terminal_states=9, bad_terminal_states=8,
                  max_steps=1000):
-        self.model = MDPUserModel(confusion_dim, num_actual_states, num_actions)
+        self.model = MDPUserModel(confusion_dim, num_actual_states, num_actions, make_confusion_matrix=True)
         self.state_buffer = self.model.state2obs(0)  # current state of the environment (use self.reset)
         self.turn = 0
         if type(good_terminal_states) is int:
@@ -54,7 +54,7 @@ class POMDPEnv(object):
 
 
 class MDPUserModel(object):
-    def __init__(self, confusion_dim, num_actual_states, num_actions):
+    def __init__(self, confusion_dim, num_actual_states, num_actions, make_confusion_matrix=False):
         self.num_states = num_actual_states
         self.num_actions = num_actions
         self.confusion_dim = confusion_dim
@@ -79,6 +79,15 @@ class MDPUserModel(object):
             [5, 3, 8],
             [6, 3, 8],
             [7, 3, 9]], dtype='int32')
+        if make_confusion_matrix:
+            shape = self.num_states + self.confusion_dim
+            shape = (shape, shape)
+            self.randproj = np.random.uniform(-1, 1, size=shape)
+            self.invrandproj = np.linalg.inv(self.randproj)
+            np.save('confusion.npz', (self.randproj, self.invrandproj))
+        else:
+            self.randproj = None
+            self.invrandproj = None
 
     def step(self, state, action):
         state_id = self.obs2state(state)
@@ -95,12 +104,6 @@ class MDPUserModel(object):
         # s[: self.confusion_dim] = numpy.random.randint(0, 2, self.confusion_dim)
         s[: self.confusion_dim] = np.random.uniform(-.5, .5, size=self.confusion_dim)
         s[self.confusion_dim + s_id] = 1.
-        if not hasattr(self, "randproj"):
-            shape = self.num_states + self.confusion_dim
-            shape = (shape, shape)
-            self.randproj = np.random.uniform(-1, 1, size=shape)
-            self.invrandproj = np.linalg.inv(self.randproj)
-            np.save('confusion.npz', (self.randproj, self.invrandproj))
         s = np.dot(self.randproj, s)
         return s
 
