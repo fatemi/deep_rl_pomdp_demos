@@ -1,12 +1,12 @@
 import pickle
 import random
-import numpy
+import numpy as np
 import yaml
-from rl import MDPExperiment, BiasedEpsilonGreedyExplorer, Agent, DQNLearner, QNetwork
+from lib import MDPExperiment, BiasedEpsilonGreedyExplorer, Agent, DQNLearner, QNetwork
 from environment import POMDPEnv
 from utils import Font
 
-numpy.random.seed(seed=123)
+np.random.seed(seed=123)
 random.seed(123)
 
 CONFIG_FILE = 'dqn/config.cfg'
