@@ -82,7 +82,8 @@ class MDPUserModel(object):
         if make_confusion_matrix:
             shape = self.num_states + self.confusion_dim
             shape = (shape, shape)
-            self.randproj = np.random.uniform(-1, 1, size=shape)
+            self.randproj = np.random.uniform(-.1, .1, size=shape)
+            np.fill_diagonal(self.randproj, 1.0)
             self.invrandproj = np.linalg.inv(self.randproj)
             np.save('confusion.npz', (self.randproj, self.invrandproj))
         else:
