@@ -105,8 +105,10 @@ class BiasedEpsilonGreedyExplorer(object):
         if np.random.binomial(1, self.epsilon):
             a = np.where(np.random.multinomial(1, self.prior) == 1)[0]
             action = a.astype('int32')
-        self.epsilon *= self.decay
         return action
+
+    def anneal(self):
+        self.epsilon *= self.decay
 
 
 class Agent(object):
