@@ -1,7 +1,5 @@
 # A Pixel-level Deep RL Implementation 
 
-## License: BSL
-
 
 DQN and DDQN implementation for Catch environtment. 
 
