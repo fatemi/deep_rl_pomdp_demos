@@ -40,7 +40,9 @@ class Experiment(object):
                 reward, term = self._step()
                 rewards.append(reward)
                 if is_learning and self.agent.learner.transitions.size >= self.agent.learner.minibatch_size:
-                    self.agent.learn()
+                    loss = self.agent.learn()
+            if is_learning and self.agent.learner.transitions.size >= self.agent.learner.minibatch_size:
+                print('Loss: {0:2.7f}'.format(float(loss)))
             all_rewards.append(rewards)
         return all_rewards
 
@@ -251,7 +253,8 @@ class Learner(object):
     def learn_episodes(self, episodes=1, *args, **kwargs):
         """ learn on the current replay pool, for given num episodes """
         for _ in range(episodes):
-            self.learn(*args, **kwargs)
+            loss = self.learn(*args, **kwargs)
+        return loss
 
     def reset(self):
         pass
@@ -297,7 +300,6 @@ class DQNLearner(Learner):
         for i in range(self.minibatch_size):
             a_mask[i, int(a[i])] = 1.
         objective = self.module.network.train_on_batch(x={'states': s, 'actions_mask': a_mask}, y={'output': targets})
-        print('objective: ', objective)
         # updating target network
         if self.update_counter == self.update_freq:
             self.module.target_network_update()
@@ -313,22 +315,7 @@ class DQNLearner(Learner):
         assert self.minibatch_size <= self.transitions.size, 'not enough data in the pool'
         # sampling one minibatch
         s, a, r, s2, term = self.transitions.sample(self.minibatch_size)
-        objective = self._train_on_batch(s, a, r, s2, term)
-        return objective
-
-    def learn_offline_batch(self, nb_epochs=1, minibatch_size=128, reset=True):
-        minibatches = self.transitions.shuffled_partition(minibatch_size)
-        nb_minibatches = len(minibatches)
-        for ep in range(nb_epochs):
-            print(Font.bold + Font.yellow + 'Training epoch ' + str(ep) + Font.end)
-            for bt, minibatch in enumerate(minibatches):
-                print(Font.cyan + 'mini batch ' + str(bt) + ' out of ' + str(nb_minibatches) + Font.end + ' loss: ')
-                s, a, r, s2, term = minibatch
-                objective = self._train_on_batch(s, a, r, s2, term)
-                print(objective)
-        if reset:
-            self.transitions = TransitionTable(self.replay_max_size)
-            self.update_counter = 0
+        return self._train_on_batch(s, a, r, s2, term)
 
     def reset(self):
         pass
