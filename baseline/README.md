@@ -1,5 +1,7 @@
 # A Pixel-level Deep RL Implementation 
 
+LISENCE: BSL
+
 DQN and DDQN implementation for Catch environtment. 
 
 The environment is borrowed from [here](https://gist.github.com/EderSantana/c7222daa328f0e885093). For more information, also see this [blog](https://edersantana.github.io/articles/keras_rl/).
